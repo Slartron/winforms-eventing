@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.VisualBasic;
 
 namespace HandlingEvents
 {
@@ -17,12 +18,17 @@ namespace HandlingEvents
             InitializeComponent();
         }
 
+
+        #region Synchronous Eventing
+
         public event Action Clicked;
 
-        private void OnClicked()
+        private void RaiseClicked()
         {
+            //In simple (single threaded) applications
             //Clicked?.Invoke();
 
+            //In advanced (multi threaded) applications you shoud prefer this way
             var handler = Clicked;
             if (handler == null)
                 return;
@@ -32,41 +38,73 @@ namespace HandlingEvents
             {
                 ((Action)delgato)();
             }
-
         }
 
-        private void button1_Click(object sender, EventArgs e)
+        private void SyncButton_Click(object sender, EventArgs e)
         {
             try
             {
-                OnClicked();
+                RaiseClicked();
             }
             catch (Exception)
             {
-                //nix
+                //handle exception
             }
         }
 
+        #endregion
 
+
+        #region Asynchronous Eventing
 
         public event Func<Task> ClickedAsync;
 
-        private async Task OnClickedAsync()
+        private async Task RaiseClickedAsync()
         {
-            await ClickedAsync?.Invoke();
+            // Asynchronous raising this way is a bad idea
+            // because GUI thread continues after first await
+            // This might not that what you want
+
+            //await ClickedAsync?.Invoke();
+            // or
+            //await Task.WhenAll(ClickedAsync?.Invoke());
+
+
+            // For full control you have to do it this way
+            // Advantage: You COULD evaluate the return value,
+            // but this might not be a good idea, since coupling
+            // will be increased
+            var handler = ClickedAsync;
+            if (handler == null)
+                return;
+
+            Delegate[] delegates = handler.GetInvocationList();
+            var tasks = new List<Task>();
+            foreach (var delgato in delegates)
+            {
+                tasks.Add(((Func<Task>)delgato)());
+            }
+
+            // One possibility to await the tasks, Task.WhenAny is possiple too.
+            await Task.WhenAll(tasks.ToArray());
+
+            MessageBox.Show($"Events raised, done!");
         }
 
 
-        private async void button2_Click(object sender, EventArgs e)
+        private async void AsyncButton_Click(object sender, EventArgs e)
         {
             try
             {
-                await OnClickedAsync();
+                await RaiseClickedAsync();
             }
             catch (Exception)
             {
-                //nix
+                //handle exception
             }
         }
+
+        #endregion
+
     }
 }
